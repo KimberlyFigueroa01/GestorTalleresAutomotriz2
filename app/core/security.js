@@ -1,6 +1,7 @@
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const { getSettings } = require('./config');
+const { sendEvent } = require('../producer');
 
 const settings = getSettings();
 
@@ -89,6 +90,16 @@ const keycloakAuthMiddleware = (req, res, next) => {
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Evento: acceso sin token
+    try {
+      sendEvent('seguridad.accesos', {
+        tipo: 'acceso_sin_token',
+        endpoint: req.path,
+        ip: req.ip || req.connection.remoteAddress
+      });
+    } catch (error) {
+      console.error('Error enviando evento acceso_sin_token:', error.message);
+    }
     return res.status(401).json({ detail: 'Token requerido' });
   }
 
@@ -97,6 +108,16 @@ const keycloakAuthMiddleware = (req, res, next) => {
     .then(payload => {
       req.user = payload;
       req.roles = extractRoles(payload);
+      // Evento: acceso válido
+      try {
+        sendEvent('seguridad.accesos', {
+          tipo: 'acceso_valido',
+          usuario: payload.preferred_username || payload.sub,
+          endpoint: req.path
+        });
+      } catch (error) {
+        console.error('Error enviando evento acceso_valido:', error.message);
+      }
       next();
     })
     .catch(error => {

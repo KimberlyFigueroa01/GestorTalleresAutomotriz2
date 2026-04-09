@@ -1,6 +1,7 @@
 // Modelos para Oracle DB
 // Usando consultas SQL directas
 
+const oracledb = require('oracledb');
 const { getConnection } = require('../core/database');
 
 class BaseModel {
@@ -17,6 +18,40 @@ class BaseModel {
       await connection.close();
     }
   }
+
+  async processRows(rows) {
+    if (!rows) return rows;
+    const processed = [];
+    for (const row of rows) {
+      const processedRow = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (value && typeof value === 'object' && value.constructor.name === 'Lob') {
+          // Leer el contenido del Lob
+          processedRow[key] = await this.readLob(value);
+        } else {
+          processedRow[key] = value;
+        }
+      }
+      processed.push(processedRow);
+    }
+    return processed;
+  }
+
+  async readLob(lob) {
+    return new Promise((resolve, reject) => {
+      let data = '';
+      lob.setEncoding('utf8');
+      lob.on('data', (chunk) => {
+        data += chunk;
+      });
+      lob.on('end', () => {
+        resolve(data);
+      });
+      lob.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
 }
 
 class Cliente extends BaseModel {
@@ -27,13 +62,14 @@ class Cliente extends BaseModel {
   async findAll() {
     const sql = `SELECT * FROM ${this.tableName} ORDER BY fecha_registro DESC`;
     const result = await this.executeQuery(sql);
-    return result.rows;
+    return await this.processRows(result.rows);
   }
 
   async findById(id) {
     const sql = `SELECT * FROM ${this.tableName} WHERE id = :id`;
     const result = await this.executeQuery(sql, [id]);
-    return result.rows[0];
+    const rows = await this.processRows(result.rows);
+    return rows[0];
   }
 
   async create(data) {

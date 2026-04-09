@@ -26,16 +26,16 @@ router.use('/reportes', reportesRouter);
 router.get('/test-kafka', async (req, res) => {
   try {
     const testEvent = {
-      action: 'test_access',
-      user: 'admin',
-      details: 'Prueba de integración Kafka'
+      tipo: 'cliente_creado',
+      clienteId: 'mock-12345', // Mock ya que no hay BD conectada
+      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido'
     };
 
     await sendEvent('seguridad.accesos', testEvent);
 
     res.json({
       status: 'success',
-      message: 'Evento enviado a Kafka exitosamente',
+      message: 'Evento cliente_creado enviado a Kafka exitosamente',
       event: testEvent
     });
   } catch (error) {
@@ -46,6 +46,20 @@ router.get('/test-kafka', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Endpoint de métricas simples (simulado, no lee Kafka)
+router.get('/metrics', (req, res) => {
+  res.json({
+    totalEventos: "Simulado: 150 eventos registrados",
+    descripcion: "Eventos registrados en Kafka para monitoreo de accesos y acciones del sistema",
+    eventosPorTipo: {
+      acceso_sin_token: "Simulado: 20 eventos",
+      acceso_valido: "Simulado: 100 eventos",
+      cliente_creado: "Simulado: 30 eventos"
+    },
+    ultimaActualizacion: new Date().toISOString()
+  });
 });
 
 module.exports = router;
