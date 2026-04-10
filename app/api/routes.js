@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { sendEvent } = require('../producer');
+const { getConnection } = require('../core/database');
+const { getEstadisticas } = require('../kafka/consumer');
 
 // Importar routers de controladores
 const authRouter = require('../controllers/auth_controller');
@@ -48,17 +50,52 @@ router.get('/test-kafka', async (req, res) => {
   }
 });
 
-// Endpoint de métricas simples (simulado, no lee Kafka)
+// Endpoint de prueba de conexión a la base de datos Oracle
+router.get('/db-test', async (req, res) => {
+  let conn;
+  try {
+    conn = await getConnection();
+    const result = await conn.execute('SELECT 1 FROM DUAL');
+    res.json({
+      status: 'ok',
+      message: 'Conexión a Oracle DB exitosa',
+      result: result.rows
+    });
+  } catch (error) {
+    console.error('Error en ruta /db-test:', error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'No se pudo conectar a Oracle DB',
+      error: error.message
+    });
+  } finally {
+    if (conn) {
+      try { await conn.close(); } catch (e) { console.error('Error cerrando conexión:', e.message); }
+    }
+  }
+});
+
+// Endpoint de métricas reales desde Kafka consumer
 router.get('/metrics', (req, res) => {
+  const stats = getEstadisticas();
+  res.json(stats);
+});
+
+// Endpoint de últimos eventos (historial)
+router.get('/eventos', (req, res) => {
+  const stats = getEstadisticas();
+  const limite = parseInt(req.query.limite) || 20;
+  const tipo = req.query.tipo || null;
+
+  let eventos = stats.ultimosEventos;
+  if (tipo) {
+    eventos = eventos.filter(e => e.tipo === tipo);
+  }
+
   res.json({
-    totalEventos: "Simulado: 150 eventos registrados",
-    descripcion: "Eventos registrados en Kafka para monitoreo de accesos y acciones del sistema",
-    eventosPorTipo: {
-      acceso_sin_token: "Simulado: 20 eventos",
-      acceso_valido: "Simulado: 100 eventos",
-      cliente_creado: "Simulado: 30 eventos"
-    },
-    ultimaActualizacion: new Date().toISOString()
+    total: stats.totalEventos,
+    mostrando: eventos.slice(0, limite).length,
+    eventos: eventos.slice(0, limite),
   });
 });
 

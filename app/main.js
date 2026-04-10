@@ -4,6 +4,7 @@ const { getSettings } = require('./core/config');
 const { initDatabase } = require('./core/database');
 const { keycloakOidc } = require('./core/security');
 const { initProducer } = require('./producer');
+const { initConsumer } = require('./kafka/consumer');
 const routes = require('./api/routes');
 
 const settings = getSettings();
@@ -32,6 +33,7 @@ async function startServer() {
       }
     // Removido: await keycloakOidc.discover(); para validación local
     await initProducer();
+    await initConsumer();
   } catch (error) {
     console.log('No se pudo inicializar algunos servicios al iniciar:', error.message);
   }
