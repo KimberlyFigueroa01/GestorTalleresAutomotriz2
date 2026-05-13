@@ -1,9 +1,12 @@
 const { Kafka } = require('kafkajs');
+const { getSettings } = require('./core/config');
 
-// Configuración del productor Kafka
+const settings = getSettings();
+
+// Configuración del productor Kafka (broker configurable vía variable de entorno)
 const kafka = new Kafka({
-  clientId: 'gestor-talleres-api',
-  brokers: ['localhost:9092']
+  clientId: settings.KAFKA_CLIENT_ID,
+  brokers: [settings.KAFKA_BROKER],
 });
 
 const producer = kafka.producer();

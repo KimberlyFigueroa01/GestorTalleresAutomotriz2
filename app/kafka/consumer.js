@@ -1,8 +1,11 @@
 const { Kafka } = require('kafkajs');
+const { getSettings } = require('../core/config');
+
+const settings = getSettings();
 
 const kafka = new Kafka({
-  clientId: 'gestor-talleres-consumer',
-  brokers: ['localhost:9092'],
+  clientId: `${settings.KAFKA_CLIENT_ID}-consumer`,
+  brokers: [settings.KAFKA_BROKER],
 });
 
 const consumer = kafka.consumer({ groupId: 'estadisticas-group' });

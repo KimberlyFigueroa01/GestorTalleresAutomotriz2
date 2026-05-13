@@ -1,8 +1,11 @@
 const { Kafka } = require('kafkajs');
+const { getSettings } = require('../core/config');
+
+const settings = getSettings();
 
 const kafka = new Kafka({
-  clientId: 'gestor-talleres',
-  brokers: ['localhost:9092'],
+  clientId: settings.KAFKA_CLIENT_ID,
+  brokers: [settings.KAFKA_BROKER],
 });
 
 const producer = kafka.producer();

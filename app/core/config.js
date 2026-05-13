@@ -17,6 +17,9 @@ const settings = {
   KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID,
   KEYCLOAK_CLIENT_SECRET: process.env.KEYCLOAK_CLIENT_SECRET,
   KEYCLOAK_AUDIENCE: process.env.KEYCLOAK_AUDIENCE,
+
+  KAFKA_BROKER: process.env.KAFKA_BROKER || 'localhost:9092',
+  KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || 'gestor-talleres-api',
 };
 
 function getSettings() {
