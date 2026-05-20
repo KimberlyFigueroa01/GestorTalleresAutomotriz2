@@ -1,4 +1,7 @@
 const { sendEvent } = require('../producer');
+const { getOrSet, invalidate } = require('../core/cache');
+
+const TTL = parseInt(process.env.CACHE_TTL_CLIENTES, 10) || 120;
 
 /**
  * PagosService
@@ -11,14 +14,13 @@ class PagosService {
   }
 
   async list() {
-    return await this.repository.list();
+    return getOrSet('pagos:all', () => this.repository.list(), TTL);
   }
 
   async create(payload) {
     try {
       const pago = await this.repository.create(payload);
 
-      // Publish domain event to Kafka (fire-and-forget)
       sendEvent('seguridad.accesos', {
         tipo: 'pago_creado',
         pagoId: pago.ID || pago.id,
@@ -27,6 +29,7 @@ class PagosService {
         metodoPago: pago.METODO_PAGO || pago.metodo_pago,
       }).catch(() => {});
 
+      await invalidate('pagos:all');
       return pago;
     } catch (err) {
       this._handleUniqueConstraintError(err);
@@ -34,10 +37,6 @@ class PagosService {
     }
   }
 
-  /**
-   * Detects Oracle unique constraint violations (ORA-00001) and
-   * PostgreSQL duplicate key errors, then throws a controlled 409.
-   */
   _handleUniqueConstraintError(err) {
     const message = (err.message || '').toLowerCase();
     const isUniqueViolation =

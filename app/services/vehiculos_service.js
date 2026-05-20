@@ -1,3 +1,7 @@
+const { getOrSet, invalidate } = require('../core/cache');
+
+const TTL = parseInt(process.env.CACHE_TTL_VEHICULOS, 10) || 120;
+
 /**
  * VehiculosService
  * Handles business logic for vehiculos with specific error handling
@@ -9,22 +13,26 @@ class VehiculosService {
   }
 
   async list() {
-    return await this.repository.list();
+    return getOrSet('vehiculos:all', () => this.repository.list(), TTL);
   }
 
   async get(placa) {
-    const vehiculo = await this.repository.get(placa);
-    if (!vehiculo) {
-      const error = new Error('Vehiculo no encontrado');
-      error.statusCode = 404;
-      throw error;
-    }
-    return vehiculo;
+    return getOrSet(`vehiculos:${placa}`, async () => {
+      const vehiculo = await this.repository.get(placa);
+      if (!vehiculo) {
+        const error = new Error('Vehiculo no encontrado');
+        error.statusCode = 404;
+        throw error;
+      }
+      return vehiculo;
+    }, TTL);
   }
 
   async create(payload) {
     try {
-      return await this.repository.create(payload);
+      const vehiculo = await this.repository.create(payload);
+      await invalidate('vehiculos:all');
+      return vehiculo;
     } catch (err) {
       this._handleUniqueConstraintError(err, 'placa');
       throw err;
@@ -32,9 +40,16 @@ class VehiculosService {
   }
 
   async update(placa, payload) {
-    await this.get(placa);
+    const existing = await this.repository.get(placa);
+    if (!existing) {
+      const error = new Error('Vehiculo no encontrado');
+      error.statusCode = 404;
+      throw error;
+    }
     try {
-      return await this.repository.update(placa, payload);
+      const vehiculo = await this.repository.update(placa, payload);
+      await invalidate('vehiculos:all', `vehiculos:${placa}`);
+      return vehiculo;
     } catch (err) {
       this._handleUniqueConstraintError(err, 'placa');
       throw err;
@@ -42,15 +57,16 @@ class VehiculosService {
   }
 
   async delete(placa) {
-    await this.get(placa);
+    const existing = await this.repository.get(placa);
+    if (!existing) {
+      const error = new Error('Vehiculo no encontrado');
+      error.statusCode = 404;
+      throw error;
+    }
     await this.repository.delete(placa);
+    await invalidate('vehiculos:all', `vehiculos:${placa}`);
   }
 
-  /**
-   * Detects Oracle unique constraint violations (ORA-00001) and
-   * PostgreSQL duplicate key errors, then throws a controlled 409
-   * instead of a generic 500.
-   */
   _handleUniqueConstraintError(err, field) {
     const message = (err.message || '').toLowerCase();
     const isUniqueViolation =
