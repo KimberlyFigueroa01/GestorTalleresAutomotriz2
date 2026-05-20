@@ -9,8 +9,8 @@ class ClientesService {
     return await this.repository.list();
   }
 
-  async get(clienteId) {
-    const cliente = await this.repository.get(clienteId);
+  async get(documento) {
+    const cliente = await this.repository.get(documento);
     if (!cliente) {
       throw new Error('Cliente no encontrado');
     }
@@ -21,13 +21,13 @@ class ClientesService {
     return await this.repository.create(payload);
   }
 
-  async update(clienteId, payload) {
-    const cliente = await this.get(clienteId);
+  async update(documento, payload) {
+    const cliente = await this.get(documento);
     return await this.repository.update(cliente, payload);
   }
 
-  async delete(clienteId) {
-    const cliente = await this.get(clienteId);
+  async delete(documento) {
+    const cliente = await this.get(documento);
     await this.repository.delete(cliente);
   }
 }

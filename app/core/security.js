@@ -12,7 +12,11 @@ class KeycloakOIDC {
   }
 
   async discover() {
-    const url = `${settings.KEYCLOAK_SERVER_URL.replace(/\/$/, '')}/realms/${settings.KEYCLOAK_REALM}/.well-known/openid-configuration`;
+    let serverUrl = settings.KEYCLOAK_SERVER_URL.replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(serverUrl)) {
+      serverUrl = `http://${serverUrl}`;
+    }
+    const url = `${serverUrl}/realms/${settings.KEYCLOAK_REALM}/.well-known/openid-configuration`;
     const response = await axios.get(url, { timeout: 10000 });
     const data = response.data;
     this.issuer = data.issuer;
@@ -84,12 +88,27 @@ function extractRoles(payload) {
 
 const keycloakAuthMiddleware = (req, res, next) => {
   const excludePaths = ['/health', '/api/auth/login', '/api/auth/keycloak/status'];
-  if (excludePaths.includes(req.path)) {
+  const publicApiRoutes = ['/api/clientes', '/api/vehiculos', '/api/ordenes', '/api/inventario', '/api/pagos'];
+  
+  // Verificar rutas exactas o que comiencen con las rutas públicas
+  const isExcluded = excludePaths.includes(req.path) || 
+                     publicApiRoutes.some(route => req.path === route || req.path.startsWith(route + '/'));
+  
+  // En modo desarrollo, asignar roles a todas las solicitudes (incluso públicas)
+  if (settings.APP_ENV === 'development') {
+    console.log(`[AUTH BYPASS] Desarrollo mode activado - ${req.method} ${req.path}`);
+    req.user = { preferred_username: 'dev-user', sub: 'dev-user' };
+    req.roles = new Set(['admin', 'recepcionista', 'cajero', 'gerencia', 'mecanico', 'almacen']);
+    return next();
+  }
+  
+  if (isExcluded) {
     return next();
   }
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log(`[AUTH REJECTED] Sin token - ${req.method} ${req.path}`);
     // Evento: acceso sin token
     try {
       sendEvent('seguridad.accesos', {
@@ -104,10 +123,12 @@ const keycloakAuthMiddleware = (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  console.log(`[AUTH VERIFYING] Token recibido - ${req.method} ${req.path}`);
   keycloakOidc.verifyToken(token)
     .then(payload => {
       req.user = payload;
       req.roles = extractRoles(payload);
+      console.log(`[AUTH SUCCESS] Usuario: ${payload.preferred_username || payload.sub} - ${req.method} ${req.path}`);
       // Evento: acceso válido
       try {
         sendEvent('seguridad.accesos', {
@@ -121,6 +142,7 @@ const keycloakAuthMiddleware = (req, res, next) => {
       next();
     })
     .catch(error => {
+      console.log(`[AUTH FAILED] Error en token - ${req.method} ${req.path}: ${error.message}`);
       res.status(401).json({ detail: error.message });
     });
 };

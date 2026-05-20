@@ -1,12 +1,13 @@
--- Esquema para Oracle DB
+-- Esquema Oracle alineado con la base de datos del taller
 
 CREATE TABLE clientes (
-    id RAW(16) PRIMARY KEY,
-    documento VARCHAR2(20) UNIQUE NOT NULL,
+    documento VARCHAR2(20) PRIMARY KEY,
     nombre VARCHAR2(100) NOT NULL,
     telefono VARCHAR2(15),
     correo VARCHAR2(100),
     direccion CLOB,
+    comuna VARCHAR2(100),
+    ciudad VARCHAR2(100),
     fecha_registro TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
@@ -15,14 +16,23 @@ CREATE TABLE vehiculos (
     marca VARCHAR2(50) NOT NULL,
     modelo VARCHAR2(50),
     color VARCHAR2(30),
-    cliente_id RAW(16) REFERENCES clientes(id) ON DELETE CASCADE
+    cliente_documento VARCHAR2(20) REFERENCES clientes(documento) ON DELETE CASCADE,
+    ano NUMBER(4),
+    tipo VARCHAR2(30),
+    vin VARCHAR2(50),
+    km NUMBER(10)
 );
 
 CREATE TABLE inventario (
     id NUMBER PRIMARY KEY,
     nombre_repuesto VARCHAR2(100) NOT NULL,
+    sku VARCHAR2(50),
+    categoria VARCHAR2(80),
+    ubicacion VARCHAR2(50),
     stock_actual NUMBER DEFAULT 0,
     stock_minimo NUMBER DEFAULT 5,
+    stock_maximo NUMBER(6),
+    precio_compra NUMBER(12,2),
     precio_venta NUMBER(12,2) NOT NULL,
     proveedor VARCHAR2(100)
 );
@@ -47,7 +57,23 @@ CREATE TABLE ordenes (
     estado VARCHAR2(20) DEFAULT 'Diagnostico',
     mecanico_asignado RAW(16),
     fecha_ingreso TIMESTAMP DEFAULT SYSTIMESTAMP,
-    fecha_entrega TIMESTAMP
+    fecha_entrega TIMESTAMP,
+    numero VARCHAR2(20),
+    tipo_servicio VARCHAR2(20),
+    descripcion CLOB,
+    prioridad VARCHAR2(20),
+    lineas CLOB,
+    inventario_vehiculo CLOB,
+    kilometraje NUMBER(10),
+    nivel_combustible NUMBER(3),
+    estado_vehiculo CLOB,
+    notas CLOB,
+    tareas CLOB,
+    subtotal NUMBER(12,2),
+    descuento NUMBER(12,2),
+    iva NUMBER(12,2),
+    total NUMBER(12,2),
+    tecnico_asignado CLOB
 );
 
 CREATE SEQUENCE ordenes_seq START WITH 1 INCREMENT BY 1;
@@ -66,6 +92,7 @@ CREATE TABLE pagos (
     orden_id NUMBER REFERENCES ordenes(id),
     monto_total NUMBER(12,2) NOT NULL,
     metodo_pago VARCHAR2(50),
+    referencia VARCHAR2(50),
     fecha_pago TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 

@@ -15,9 +15,7 @@ async function initDatabase() {
       poolMax: 10,
       poolIncrement: 1,
     });
-    console.log('Conexión a Oracle exitosa');
   } catch (error) {
-    console.error('Error conectando a Oracle:', error);
     throw error;
   }
 }

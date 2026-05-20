@@ -29,7 +29,7 @@ router.get('/test-kafka', async (req, res) => {
   try {
     const testEvent = {
       tipo: 'cliente_creado',
-      clienteId: 'mock-12345', // Mock ya que no hay BD conectada
+      documento: 'mock-12345',
       usuario: req.user?.preferred_username || req.user?.sub || 'desconocido'
     };
 

@@ -9,13 +9,25 @@ const kafka = new Kafka({
 });
 
 const producer = kafka.producer();
+let connected = false;
 
 const connectProducer = async () => {
-  await producer.connect();
-  console.log('Kafka conectado');
+  try {
+    await producer.connect();
+    connected = true;
+    console.log('Kafka conectado');
+  } catch (error) {
+    connected = false;
+    console.error('[Kafka] Error al conectar productor:', error.message);
+    throw error;
+  }
 };
 
 const sendEvent = async (topic, event) => {
+  if (!connected) {
+    throw new Error('Kafka producer no disponible');
+  }
+
   try {
     await producer.send({
       topic,
@@ -29,7 +41,8 @@ const sendEvent = async (topic, event) => {
       ],
     });
   } catch (error) {
-    console.error('Error enviando evento:', error);
+    console.error(`[Kafka] Error enviando evento (topic=${topic}):`, error.message);
+    throw error;
   }
 };
 

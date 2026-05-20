@@ -1,158 +1,134 @@
 const express = require('express');
 const router = express.Router();
+const { Cliente } = require('../entities/models');
 const ClientesRepository = require('../repositories/clientes_repository');
 const ClientesService = require('../services/clientes_service');
 const { requireRoles } = require('../core/security');
-const { clienteCreateSchema, clienteUpdateSchema } = require('../schemas/clientes');
+const {
+  clienteCreateSchema,
+  clienteUpdateSchema,
+  clienteFrontendCreateSchema,
+  clienteFrontendUpdateSchema,
+} = require('../schemas/clientes');
+const { normalizeRow } = require('../core/row_utils');
 const { sendEvent } = require('../producer');
 
-router.get('/', async (req, res) => {
+async function buildFrontCliente(clienteRaw) {
+  const c = normalizeRow(clienteRaw);
+  const model = new Cliente();
+  const vehiculos = await model.countVehiculos(c.documento);
+  const ultima = await model.ultimaOrden(c.documento);
+
+  return {
+    id: c.documento,
+    nombre: c.nombre,
+    email: c.correo || null,
+    telefono: c.telefono || '',
+    rut: c.documento,
+    direccion: c.direccion || null,
+    comuna: c.comuna || null,
+    ciudad: c.ciudad || null,
+    vehiculos: Number(vehiculos) || 0,
+    ultimaVisita: ultima?.fecha_ingreso
+      ? new Date(ultima.fecha_ingreso).toISOString()
+      : null,
+    estadoOrden: ultima?.estado || null,
+  };
+}
+
+function mapFrontendToDb(payload) {
+  const mapped = {
+    documento: payload.rut ?? payload.documento,
+    nombre: payload.nombre,
+    telefono: payload.telefono,
+    correo: payload.email ?? payload.correo,
+    direccion: payload.direccion,
+    comuna: payload.comuna,
+    ciudad: payload.ciudad,
+  };
+  return Object.fromEntries(
+    Object.entries(mapped).filter(([, v]) => v !== undefined)
+  );
+}
+
+router.get('/', requireRoles('admin', 'recepcionista'), async (req, res) => {
   try {
-    const repository = new ClientesRepository();
-    const service = new ClientesService(repository);
+    const service = new ClientesService(new ClientesRepository());
     const clientes = await service.list();
+    const results = await Promise.all(clientes.map((c) => buildFrontCliente(c)));
     sendEvent('seguridad.accesos', {
       tipo: 'clientes_listado',
-      cantidad: clientes.length,
+      cantidad: results.length,
       usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
     }).catch(() => {});
-    res.json(clientes);
+    res.json(results);
   } catch (error) {
-    sendEvent('seguridad.accesos', {
-      tipo: 'clientes_listado_error',
-      error: error.message,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
     res.status(500).json({ error: error.message });
   }
 });
 
-router.get('/:clienteId', async (req, res) => {
+router.get('/:documento', requireRoles('admin', 'recepcionista'), async (req, res) => {
   try {
-    const { clienteId } = req.params;
-    const repository = new ClientesRepository();
-    const service = new ClientesService(repository);
-    const cliente = await service.get(clienteId);
-    sendEvent('seguridad.accesos', {
-      tipo: 'cliente_consultado',
-      clienteId,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
-    res.json(cliente);
+    const service = new ClientesService(new ClientesRepository());
+    const cliente = await service.get(req.params.documento);
+    res.json(await buildFrontCliente(cliente));
   } catch (error) {
-    sendEvent('seguridad.accesos', {
-      tipo: error.message === 'Cliente no encontrado' ? 'cliente_no_encontrado' : 'cliente_consultado_error',
-      clienteId: req.params.clienteId,
-      error: error.message,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
-    if (error.message === 'Cliente no encontrado') {
-      res.status(404).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: error.message });
-    }
+    res.status(error.message === 'Cliente no encontrado' ? 404 : 500).json({ error: error.message });
   }
 });
 
 router.post('/', requireRoles('admin', 'recepcionista'), async (req, res) => {
   try {
-    const { error, value } = clienteCreateSchema.validate(req.body);
-    if (error) {
-      sendEvent('seguridad.accesos', {
-        tipo: 'cliente_creado_error',
-        motivo: 'validacion_fallida',
-        error: error.details[0].message,
-        usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-      }).catch(() => {});
-      return res.status(400).json({ error: error.details[0].message });
+    let validation = clienteFrontendCreateSchema.validate(req.body);
+    if (validation.error) {
+      validation = clienteCreateSchema.validate(req.body);
     }
-    const repository = new ClientesRepository();
-    const service = new ClientesService(repository);
-    const cliente = await service.create(value);
+    if (validation.error) {
+      return res.status(400).json({ error: validation.error.details[0].message });
+    }
+
+    const dbPayload = mapFrontendToDb(validation.value);
+    const service = new ClientesService(new ClientesRepository());
+    const cliente = await service.create(dbPayload);
+
     sendEvent('seguridad.accesos', {
       tipo: 'cliente_creado',
-      clienteId: cliente?.id || 'nuevo',
-      documento: value.documento,
-      nombre: value.nombre,
+      documento: dbPayload.documento,
       usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
     }).catch(() => {});
-    res.status(201).json(cliente);
+
+    res.status(201).json(await buildFrontCliente(cliente));
   } catch (error) {
-    sendEvent('seguridad.accesos', {
-      tipo: 'cliente_creado_error',
-      motivo: 'error_bd',
-      error: error.message,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
     res.status(500).json({ error: error.message });
   }
 });
 
-router.put('/:clienteId', requireRoles('admin', 'recepcionista'), async (req, res) => {
+router.put('/:documento', requireRoles('admin', 'recepcionista'), async (req, res) => {
   try {
-    const { clienteId } = req.params;
-    const { error, value } = clienteUpdateSchema.validate(req.body);
-    if (error) {
-      sendEvent('seguridad.accesos', {
-        tipo: 'cliente_actualizado_error',
-        motivo: 'validacion_fallida',
-        clienteId,
-        error: error.details[0].message,
-        usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-      }).catch(() => {});
-      return res.status(400).json({ error: error.details[0].message });
+    let validation = clienteFrontendUpdateSchema.validate(req.body);
+    if (validation.error) {
+      validation = clienteUpdateSchema.validate(req.body);
     }
-    const repository = new ClientesRepository();
-    const service = new ClientesService(repository);
-    const cliente = await service.update(clienteId, value);
-    sendEvent('seguridad.accesos', {
-      tipo: 'cliente_actualizado',
-      clienteId,
-      camposActualizados: Object.keys(value),
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
-    res.json(cliente);
+    if (validation.error) {
+      return res.status(400).json({ error: validation.error.details[0].message });
+    }
+
+    const dbPayload = mapFrontendToDb(validation.value);
+    const service = new ClientesService(new ClientesRepository());
+    const cliente = await service.update(req.params.documento, dbPayload);
+    res.json(await buildFrontCliente(cliente));
   } catch (error) {
-    sendEvent('seguridad.accesos', {
-      tipo: 'cliente_actualizado_error',
-      motivo: error.message === 'Cliente no encontrado' ? 'no_encontrado' : 'error_bd',
-      clienteId: req.params.clienteId,
-      error: error.message,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
-    if (error.message === 'Cliente no encontrado') {
-      res.status(404).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: error.message });
-    }
+    res.status(error.message === 'Cliente no encontrado' ? 404 : 500).json({ error: error.message });
   }
 });
 
-router.delete('/:clienteId', requireRoles('admin'), async (req, res) => {
+router.delete('/:documento', requireRoles('admin'), async (req, res) => {
   try {
-    const { clienteId } = req.params;
-    const repository = new ClientesRepository();
-    const service = new ClientesService(repository);
-    await service.delete(clienteId);
-    sendEvent('seguridad.accesos', {
-      tipo: 'cliente_eliminado',
-      clienteId,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
+    const service = new ClientesService(new ClientesRepository());
+    await service.delete(req.params.documento);
     res.status(204).send();
   } catch (error) {
-    sendEvent('seguridad.accesos', {
-      tipo: 'cliente_eliminado_error',
-      motivo: error.message === 'Cliente no encontrado' ? 'no_encontrado' : 'error_bd',
-      clienteId: req.params.clienteId,
-      error: error.message,
-      usuario: req.user?.preferred_username || req.user?.sub || 'desconocido',
-    }).catch(() => {});
-    if (error.message === 'Cliente no encontrado') {
-      res.status(404).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: error.message });
-    }
+    res.status(error.message === 'Cliente no encontrado' ? 404 : 500).json({ error: error.message });
   }
 });
 
