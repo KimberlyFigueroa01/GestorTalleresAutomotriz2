@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const { getSettings } = require('./core/config');
 const { initDatabase } = require('./core/database');
+const { syncLegacySchema } = require('./core/sync_legacy_schema');
 const { keycloakOidc } = require('./core/security');
 const { initProducer, disconnectProducer } = require('./producer');
 const { initConsumer, stopConsumer } = require('./kafka/consumer');
@@ -40,6 +41,12 @@ async function startServer() {
     console.log('Base de datos Oracle conectada');
   } catch (error) {
     console.error('No se pudo conectar a Oracle al iniciar:', error.message);
+  }
+
+  try {
+    await syncLegacySchema();
+  } catch (error) {
+    console.error('Error en sincronización de esquema legacy:', error.message);
   }
 
   try {

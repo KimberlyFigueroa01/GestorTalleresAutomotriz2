@@ -25,9 +25,8 @@ async function initProducer() {
 
 async function sendEvent(topic, event) {
   if (!connected) {
-    const err = new Error('Kafka producer no disponible');
-    console.error(`[Kafka Producer] Intento de envío sin conexión (topic=${topic})`);
-    throw err;
+    console.warn(`[Kafka Producer] Productor no disponible, evento no publicado (topic=${topic})`);
+    return;
   }
 
   const eventWithTimestamp = {
@@ -43,7 +42,7 @@ async function sendEvent(topic, event) {
     console.log(`[Kafka Producer] Evento enviado al topic "${topic}"`);
   } catch (error) {
     console.error(`[Kafka Producer] Error al enviar evento (topic=${topic}):`, error.message);
-    throw error;
+    // Graceful error handling: log but don't throw to prevent API crashes
   }
 }
 
