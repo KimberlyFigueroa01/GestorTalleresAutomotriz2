@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 const { getSettings } = require('./core/config');
 const { initDatabase } = require('./core/database');
@@ -6,24 +7,36 @@ const { keycloakOidc } = require('./core/security');
 const { initProducer, disconnectProducer } = require('./producer');
 const { initConsumer, stopConsumer } = require('./kafka/consumer');
 const routes = require('./api/routes');
+const authRouter = require('./controllers/auth_controller');
 
 const settings = getSettings();
 
 // CORS para permitir conexiones del frontend
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
+app.use(cors({
+  origin: [
+    'https://taller-mecanico-frontend.onrender.com',
+    'http://localhost:4000',
+    'http://localhost:4200'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'ngrok-skip-browser-warning'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
+
+app.options('*', cors());
 
 app.use(express.json());
 
 // Middleware de autenticación Keycloak
 app.use(require('./core/security').keycloakAuthMiddleware);
+
+// Alias para compatibilidad con frontend que usa /auth/login
+app.use('/auth', authRouter);
 
 // Rutas
 app.use('/api', routes);

@@ -18,7 +18,10 @@ class BaseModel {
   async executeQuery(sql, binds = {}) {
     const connection = await getConnection();
     try {
-      return await connection.execute(sql, binds, { autoCommit: true });
+      return await connection.execute(sql, binds, {
+        autoCommit: true,
+        outFormat: oracledb.OUT_FORMAT_OBJECT,
+      });
     } finally {
       await connection.close();
     }

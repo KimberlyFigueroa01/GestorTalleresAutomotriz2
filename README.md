@@ -215,6 +215,22 @@ Productor de Kafka conectado
 Servidor corriendo en 0.0.0.0:8000
 ```
 
+### 7. Exponer la API con ngrok y agregar CORS
+
+Si necesitas exponer la API localmente para el frontend, usa el siguiente comando:
+
+```bash
+npm run ngrok
+```
+
+Este script arranca ngrok en el puerto 8000 y agrega el header:
+
+```bash
+ngrok http 8000 --response-header-add "Access-Control-Allow-Origin: *"
+```
+
+Esto asegura que ngrok inyecte automáticamente el header CORS en las respuestas.
+
 ---
 
 ## 🔐 Rol y Permisos en Keycloak
