@@ -360,6 +360,7 @@ class Orden extends BaseModel {
       iva: data.iva ?? null,
       total: data.total ?? null,
       tecnico_asignado: data.tecnico_asignado || null,
+      mecanico_asignado: data.mecanico_asignado ?? null,
       fecha_ingreso: data.fecha_ingreso || new Date(),
       fecha_entrega: data.fecha_entrega || null,
     });
@@ -370,13 +371,13 @@ class Orden extends BaseModel {
         (id, placa_vehiculo, diagnostico, trabajo_realizado, estado, numero, tipo_servicio,
          descripcion, prioridad, lineas, inventario_vehiculo, kilometraje, nivel_combustible,
          estado_vehiculo, notas, tareas, subtotal, descuento, iva, total, tecnico_asignado,
-         fecha_ingreso, fecha_entrega)
+         mecanico_asignado, fecha_ingreso, fecha_entrega)
        VALUES
         (ordenes_seq.NEXTVAL, :placa_vehiculo, :diagnostico, :trabajo_realizado, :estado,
          :numero, :tipo_servicio, :descripcion, :prioridad, :lineas, :inventario_vehiculo,
          :kilometraje, :nivel_combustible, :estado_vehiculo, :notas, :tareas,
          :subtotal, :descuento, :iva, :total, :tecnico_asignado,
-         :fecha_ingreso, :fecha_entrega)
+         :mecanico_asignado, :fecha_ingreso, :fecha_entrega)
        RETURNING id INTO :out_id`,
       binds
     );

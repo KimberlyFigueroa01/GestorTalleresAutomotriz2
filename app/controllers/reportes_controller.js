@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireRoles } = require('../core/security');
 const { getEstadisticas } = require('../kafka/consumer');
+const reportesService = require('../services/reportes_service');
 const { Orden, Pago, Inventario, Vehiculo, Cliente } = require('../entities/models');
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -31,26 +32,7 @@ function getMonthLabel(date) {
 
 router.get('/ingresos', requireRoles('admin', 'gerencia'), async (_req, res) => {
   try {
-    const pagoModel = new Pago();
-    const pagos = await pagoModel.findAll();
-    const normalized = pagos.map(normalizeRow);
-
-    // Group payments by date
-    const ingresosPorDia = {};
-    for (const p of normalized) {
-      if (!p.fecha_pago) continue;
-      const fecha = new Date(p.fecha_pago).toISOString().split('T')[0];
-      if (!ingresosPorDia[fecha]) {
-        ingresosPorDia[fecha] = { fecha, total_dia: 0, cantidad_pagos: 0 };
-      }
-      ingresosPorDia[fecha].total_dia += parseFloat(p.monto_total) || 0;
-      ingresosPorDia[fecha].cantidad_pagos += 1;
-    }
-
-    const result = Object.values(ingresosPorDia)
-      .sort((a, b) => b.fecha.localeCompare(a.fecha))
-      .map(d => ({ ...d, total_dia: Math.round(d.total_dia * 100) / 100 }));
-
+    const result = await reportesService.getIngresos();
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -59,19 +41,7 @@ router.get('/ingresos', requireRoles('admin', 'gerencia'), async (_req, res) => 
 
 router.get('/alertas-stock', requireRoles('admin', 'gerencia'), async (_req, res) => {
   try {
-    const inventarioModel = new Inventario();
-    const items = await inventarioModel.findAll();
-    const normalized = items.map(normalizeRow);
-
-    const alertas = normalized
-      .filter(item => (item.stock_actual || 0) < (item.stock_minimo || 5))
-      .map(item => ({
-        id: item.id,
-        nombre_repuesto: item.nombre_repuesto,
-        stock_actual: item.stock_actual,
-        stock_minimo: item.stock_minimo,
-      }));
-
+    const alertas = await reportesService.getAlertasStock();
     res.json(alertas);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -80,27 +50,11 @@ router.get('/alertas-stock', requireRoles('admin', 'gerencia'), async (_req, res
 
 router.get('/ordenes', requireRoles('admin', 'gerencia'), async (_req, res) => {
   try {
-    const ordenModel = new Orden();
-    const ordenes = await ordenModel.findAll();
-    const normalized = ordenes.map(normalizeRow);
-
-    const resumen = normalized.map(o => ({
-      id: o.id,
-      placa_vehiculo: o.placa_vehiculo,
-      estado: o.estado,
-      fecha_ingreso: o.fecha_ingreso,
-      fecha_entrega: o.fecha_entrega,
-    }));
-
+    const resumen = await reportesService.getOrdenes();
     res.json(resumen);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
-
-router.get('/kafka-metricas', requireRoles('admin', 'gerencia'), (_req, res) => {
-  const stats = getEstadisticas();
-  res.json(stats);
 });
 
 // ── Dashboard (structured, scalable response) ──────────────────────

@@ -16,11 +16,31 @@ class KeycloakOIDC {
     if (!/^https?:\/\//i.test(serverUrl)) {
       serverUrl = `http://${serverUrl}`;
     }
-    const url = `${serverUrl}/realms/${settings.KEYCLOAK_REALM}/.well-known/openid-configuration`;
-    const response = await axios.get(url, { timeout: 10000 });
-    const data = response.data;
-    this.issuer = data.issuer;
-    this.tokenEndpoint = data.token_endpoint;
+
+    const candidates = [...new Set([serverUrl, `${serverUrl}/auth`])];
+    let lastError = null;
+
+    for (const baseUrl of candidates) {
+      const url = `${baseUrl}/realms/${settings.KEYCLOAK_REALM}/.well-known/openid-configuration`;
+      try {
+        const response = await axios.get(url, { timeout: 10000 });
+        const data = response.data;
+        this.issuer = data.issuer;
+        this.tokenEndpoint = data.token_endpoint;
+        return;
+      } catch (error) {
+        lastError = error;
+        console.error('[Auth] Keycloak discover error:', lastError?.response?.data || lastError?.message);
+      }
+    }
+
+    const discoveryUrls = candidates
+      .map(baseUrl => `${baseUrl}/realms/${settings.KEYCLOAK_REALM}/.well-known/openid-configuration`)
+      .join(', ');
+    const message = lastError?.response?.status === 404
+      ? `Keycloak discovery falló con 404. URLs probadas: ${discoveryUrls}`
+      : lastError?.message || `No se pudo descubrir Keycloak. URLs probadas: ${discoveryUrls}`;
+    throw new Error(message);
   }
 
   async verifyToken(token) {
@@ -73,6 +93,7 @@ class KeycloakOIDC {
         token_type: tokenData.token_type,
       };
     } catch (error) {
+      console.error('[Auth] Keycloak login error:', error?.response?.data || error.message);
       throw new Error('Credenciales inválidas o Keycloak no disponible');
     }
   }

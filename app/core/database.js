@@ -1,6 +1,8 @@
 const oracledb = require('oracledb');
 const { getSettings } = require('./config');
 
+oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
+
 const settings = getSettings();
 
 let pool;

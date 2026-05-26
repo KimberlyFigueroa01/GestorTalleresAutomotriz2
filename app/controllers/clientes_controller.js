@@ -14,31 +14,26 @@ const { normalizeRow } = require('../core/row_utils');
 const { sendEvent } = require('../producer');
 
 async function buildFrontCliente(clienteRaw) {
-  const c = normalizeRow(clienteRaw);
+  const c = normalizeRow(clienteRaw || {});
   const model = new Cliente();
   const vehiculos = await model.countVehiculos(c.documento);
-  const ultima = await model.ultimaOrden(c.documento);
 
   return {
     id: c.documento,
     nombre: c.nombre,
-    email: c.correo || null,
+    email: c.correo ?? c.email ?? null,
     telefono: c.telefono || '',
     rut: c.documento,
-    direccion: c.direccion || null,
-    comuna: c.comuna || null,
-    ciudad: c.ciudad || null,
+    direccion: c.direccion ?? c.domicilio ?? null,
+    comuna: c.comuna ?? null,
+    ciudad: c.ciudad ?? null,
     vehiculos: Number(vehiculos) || 0,
-    ultimaVisita: ultima?.fecha_ingreso
-      ? new Date(ultima.fecha_ingreso).toISOString()
-      : null,
-    estadoOrden: ultima?.estado || null,
   };
 }
 
 function mapFrontendToDb(payload) {
   const mapped = {
-    documento: payload.rut ?? payload.documento,
+    documento: payload.rut ?? payload.documento ?? payload.id,
     nombre: payload.nombre,
     telefono: payload.telefono,
     correo: payload.email ?? payload.correo,
